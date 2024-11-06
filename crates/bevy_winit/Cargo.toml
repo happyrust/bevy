@@ -41,9 +41,10 @@ bevy_asset = { path = "../bevy_asset", version = "0.15.0-dev", optional = true }
 bevy_image = { path = "../bevy_image", version = "0.15.0-dev", optional = true }
 
 # other
-# feature rwh_06 refers to window_raw_handle@v0.6
-winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
-accesskit_winit = { version = "0.23", default-features = false, features = [
+# feature rwh_05 refers to window_raw_handle@v0.5,
+# updating to rwh_06 is blocked until wgpu 0.19 release lands.
+winit = { path = "../../../winit", default-features = false, features = ["rwh_06"] }
+accesskit_winit = { path = "../../../accesskit/platforms/winit", default-features = false, features = [
   "rwh_06",
 ] }
 approx = { version = "0.5", default-features = false }
@@ -51,7 +52,13 @@ cfg-if = "1.0"
 raw-window-handle = "0.6"
 serde = { version = "1.0", features = ["derive"], optional = true }
 bytemuck = { version = "1.5", optional = true }
-wgpu-types = { version = "23", optional = true }
+wgpu-types = { path = "../../../wgpu/wgpu-types", optional = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+winit = { path = "../../../winit", default-features = false, features = [
+  "android-native-activity",
+  "rwh_06",
+] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { version = "0.2" }

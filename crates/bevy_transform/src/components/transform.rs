@@ -37,7 +37,9 @@ use {
 ///
 /// [transform_example]: https://github.com/bevyengine/bevy/blob/latest/examples/transforms/transform.rs
 #[derive(Debug, PartialEq, Clone, Copy)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize, rkyv::Archive,
+    rkyv::Deserialize,
+    rkyv::Serialize))]
 #[cfg_attr(
     feature = "bevy-support",
     derive(Component, Reflect),
@@ -296,6 +298,11 @@ impl Transform {
         self.local_z()
     }
 
+    #[inline]
+    pub fn is_nan(&self) -> bool {
+        self.rotation.is_nan() || self.scale.is_nan() || self.translation.is_nan()
+    }
+
     /// Rotates this [`Transform`] by the given rotation.
     ///
     /// If this [`Transform`] has a parent, the `rotation` is relative to the rotation of the parent.
@@ -552,6 +559,11 @@ impl Transform {
     #[inline]
     pub fn to_isometry(&self) -> Isometry3d {
         Isometry3d::new(self.translation, self.rotation)
+    }
+
+    #[inline]
+    pub fn transform_vec3(&self, vec: Vec3) -> Vec3 {
+        self.rotation.mul_vec3(vec)
     }
 }
 

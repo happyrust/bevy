@@ -134,6 +134,17 @@ impl<S: FreelyMutableState> NextState<S> {
         *self = Self::Pending(state);
     }
 
+    pub fn is_pending(&self) -> bool {
+        matches!(self, Self::Pending(_))
+    }
+
+    pub fn clone_pending(&self) -> Option<S> {
+        match self {
+            Self::Pending(state) => Some(state.clone()),
+            _ => None,
+        }
+    }
+
     /// Remove any pending changes to [`State<S>`]
     pub fn reset(&mut self) {
         *self = Self::Unchanged;

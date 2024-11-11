@@ -53,6 +53,7 @@ raw-window-handle = "0.6"
 serde = { version = "1.0", features = ["derive"], optional = true }
 bytemuck = { version = "1.5", optional = true }
 wgpu-types = { path = "../../../wgpu/wgpu-types", optional = true }
+accesskit = { path = "../../../accesskit/common" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 winit = { path = "../../../winit", default-features = false, features = [

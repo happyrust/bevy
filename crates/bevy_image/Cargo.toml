@@ -49,6 +49,7 @@ image = { version = "0.25.2", default-features = false }
 # misc
 bitflags = { version = "2.3", features = ["serde"] }
 bytemuck = { version = "1.5" }
+wgpu-types = { path = "../../../wgpu/wgpu-types", default-features = false }
 wgpu = {  path = "../../../wgpu/wgpu", default-features = false }
 serde = { version = "1", features = ["derive"] }
 derive_more = { version = "1", default-features = false, features = [

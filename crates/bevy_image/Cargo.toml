@@ -52,11 +52,7 @@ bytemuck = { version = "1.5" }
 wgpu-types = { path = "../../../wgpu/wgpu-types", default-features = false }
 wgpu = {  path = "../../../wgpu/wgpu", default-features = false }
 serde = { version = "1", features = ["derive"] }
-derive_more = { version = "1", default-features = false, features = [
-  "error",
-  "from",
-  "display",
-] }
+thiserror = { version = "2", default-features = false }
 futures-lite = "2.0.1"
 ddsfile = { version = "0.5.2", optional = true }
 ktx2 = { version = "0.3.0", optional = true }

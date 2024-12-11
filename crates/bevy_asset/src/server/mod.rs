@@ -1384,7 +1384,7 @@ impl AssetServer {
     /// asset from being dropped.
     /// If you have access to an asset's strong [`Handle`], you should prefer to call
     /// [`AssetServer::wait_for_asset`]
-    /// or [`wait_for_assest_untyped`](Self::wait_for_asset_untyped) to ensure the asset finishes
+    /// or [`wait_for_asset_untyped`](Self::wait_for_asset_untyped) to ensure the asset finishes
     /// loading.
     ///
     /// # Errors
@@ -1544,7 +1544,7 @@ pub fn handle_internal_asset_events(world: &mut World) {
             }
         };
 
-        let mut paths_to_reload = HashSet::new();
+        let mut paths_to_reload = <HashSet<_>>::default();
         let mut handle_event = |source: AssetSourceId<'static>, event: AssetSourceEvent| {
             match event {
                 // TODO: if the asset was processed and the processed file was changed, the first modified event

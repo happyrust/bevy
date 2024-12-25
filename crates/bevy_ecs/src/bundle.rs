@@ -1695,10 +1695,19 @@ mod tests {
         let mut world = World::new();
         world.init_resource::<R>();
         world
+            // 为组件 `A` 注册一组生命周期钩子
             .register_component_hooks::<A>()
+            // 增加 `on_add` 钩子。当组件被添加到一个实体时调用。
+            // 钩子内容：获取资源 `R` 的可变引用，并断言其当前值为 0。
             .on_add(|mut world, _, _| world.resource_mut::<R>().assert_order(0))
+            // 增加 `on_insert` 钩子。当组件通过 `.insert` 被插入或更改时调用。
+            // 钩子内容：获取资源 `R` 的可变引用，并断言其当前值为 1。
             .on_insert(|mut world, _, _| world.resource_mut::<R>().assert_order(1))
+            // 增加 `on_replace` 钩子。当组件被替换时调用。
+            // 钩子内容：获取资源 `R` 的可变引用，并断言其当前值为 2。
             .on_replace(|mut world, _, _| world.resource_mut::<R>().assert_order(2))
+            // 增加 `on_remove` 钩子。当组件从一个实体中移除时调用。
+            // 钩子内容：获取资源 `R` 的可变引用，并断言其当前值为 3。
             .on_remove(|mut world, _, _| world.resource_mut::<R>().assert_order(3));
 
         let entity = world.spawn(A).id();

@@ -32,7 +32,7 @@ pub struct WindowResized {
     pub height: f32,
 }
 
-/// An event that indicates all of the application's windows should be redrawn,
+/// An event that indicates all the application's windows should be redrawn,
 /// even if their control flow is set to `Wait` and there have been no window events.
 #[derive(Event, Debug, Clone, PartialEq, Eq, Reflect)]
 #[reflect(Debug, PartialEq)]

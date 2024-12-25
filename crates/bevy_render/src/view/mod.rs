@@ -42,6 +42,7 @@ use wgpu::{
     BufferUsages, Extent3d, RenderPassColorAttachment, RenderPassDepthStencilAttachment, StoreOp,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
 };
+use bevy_utils::tracing::info;
 
 pub const VIEW_TYPE_HANDLE: Handle<Shader> = Handle::weak_from_u128(15421373904451797197);
 

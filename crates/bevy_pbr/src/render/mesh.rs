@@ -67,7 +67,7 @@ use bytemuck::{Pod, Zeroable};
 use nonmax::{NonMaxU16, NonMaxU32};
 use smallvec::{smallvec, SmallVec};
 use static_assertions::const_assert_eq;
-
+use bevy_utils::tracing::info;
 use self::irradiance_volume::IRRADIANCE_VOLUMES_ARE_USABLE;
 
 /// Provides support for rendering 3D meshes.

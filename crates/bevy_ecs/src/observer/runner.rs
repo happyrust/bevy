@@ -65,23 +65,31 @@ impl Component for ObserverState {
     const STORAGE_TYPE: StorageType = StorageType::SparseSet;
     type Mutability = Mutable;
 
+    // 注册组件生命周期钩子
     fn register_component_hooks(hooks: &mut ComponentHooks) {
+        // 当组件被添加到实体时触发的钩子逻辑
         hooks.on_add(|mut world, entity, _| {
+            // 将一个观察者注册任务排入命令队列
             world.commands().queue(move |world: &mut World| {
-                world.register_observer(entity);
+                world.register_observer(entity); // 注册观察者
             });
         });
+
+        // 当组件从实体中移除时触发的钩子逻辑
         hooks.on_remove(|mut world, entity, _| {
+            // 从实体的 `ObserverState` 中提取观察者描述符并清空
             let descriptor = core::mem::take(
                 &mut world
-                    .entity_mut(entity)
-                    .get_mut::<ObserverState>()
-                    .unwrap()
-                    .as_mut()
-                    .descriptor,
+                    .entity_mut(entity) // 获取实体的可变引用
+                    .get_mut::<ObserverState>() // 获取 ObserverState 的可变引用
+                    .unwrap() // 确保存在 ObserverState
+                    .as_mut() // 获取其可变引用
+                    .descriptor, // 提取 descriptor 字段
             );
+
+            // 将一个取消注册观察者任务排入命令队列
             world.commands().queue(move |world: &mut World| {
-                world.unregister_observer(entity, descriptor);
+                world.unregister_observer(entity, descriptor); // 取消注册观察者
             });
         });
     }

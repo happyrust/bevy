@@ -101,7 +101,7 @@ use alloc::sync::Arc;
 use bevy_app::{App, AppLabel, Plugin, SubApp};
 use bevy_asset::{load_internal_asset, AssetApp, AssetServer, Handle};
 use bevy_ecs::{prelude::*, schedule::ScheduleLabel};
-use bevy_utils::tracing::debug;
+use bevy_utils::tracing::{debug, info};
 use core::ops::{Deref, DerefMut};
 use std::sync::Mutex;
 
@@ -274,6 +274,7 @@ impl Plugin for RenderPlugin {
             }
             RenderCreation::Automatic(render_creation) => {
                 if let Some(backends) = render_creation.backends {
+                    info!("backends: {:?}", &backends);
                     let future_render_resources_wrapper = Arc::new(Mutex::new(None));
                     app.insert_resource(FutureRenderResources(
                         future_render_resources_wrapper.clone(),

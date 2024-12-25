@@ -961,6 +961,7 @@ pub struct StandardMaterialUniform {
     pub deferred_lighting_pass_id: u32,
 }
 
+//需要转换的类型，将StandardMaterial转成 StandardMaterialUniform
 impl AsBindGroupShaderType<StandardMaterialUniform> for StandardMaterial {
     fn as_bind_group_shader_type(
         &self,

@@ -553,6 +553,7 @@ where
             })
             .collect::<Vec<_>>();
 
+        dbg!("recreated here");
         self.bind_group =
             Some(render_device.create_bind_group(M::label(), bind_group_layout, &entries));
     }
@@ -780,7 +781,8 @@ where
             free_bind_groups: vec![],
             bind_group_layout,
             fallback_buffers,
-            bindless_enabled: material_uses_bindless_resources::<M>(render_device),
+            // bindless_enabled: material_uses_bindless_resources::<M>(render_device),
+            bindless_enabled: false,
             phantom: PhantomData,
         }
     }

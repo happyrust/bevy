@@ -37,7 +37,6 @@ use bevy_render::{
     render_phase::*,
     render_resource::*,
     renderer::RenderDevice,
-    sync_world::MainEntity,
     view::{ExtractedView, Msaa, RenderVisibilityRanges, ViewVisibility},
     Extract,
 };
@@ -583,122 +582,26 @@ pub const fn screen_space_specular_transmission_pipeline_key(
     }
 }
 
-/// Fills the [`RenderMaterialInstances`] and [`RenderMeshMaterialIds`]
-/// resources from the meshes in the scene.
-fn extract_mesh_materials<M: Material>(
+pub fn extract_mesh_materials<M: Material>(
     mut material_instances: ResMut<RenderMaterialInstances<M>>,
     mut material_ids: ResMut<RenderMeshMaterialIds>,
     mut material_bind_group_allocator: ResMut<MaterialBindGroupAllocator<M>>,
-    changed_meshes_query: Extract<
-        Query<
-            (Entity, &ViewVisibility, &MeshMaterial3d<M>),
-            Or<(Changed<ViewVisibility>, Changed<MeshMaterial3d<M>>)>,
-        >,
-    >,
-    mut removed_visibilities_query: Extract<RemovedComponents<ViewVisibility>>,
-    mut removed_materials_query: Extract<RemovedComponents<MeshMaterial3d<M>>>,
+    query: Extract<Query<(Entity, &ViewVisibility, &MeshMaterial3d<M>)>>,
 ) {
-    for (entity, view_visibility, material) in &changed_meshes_query {
+    material_instances.clear();
+
+    for (entity, view_visibility, material) in &query {
         if view_visibility.get() {
-            add_mesh_instance(
-                entity,
-                material,
-                &mut material_instances,
-                &mut material_ids,
-                &mut material_bind_group_allocator,
-            );
-        } else {
-            remove_mesh_instance(
-                entity,
-                &mut material_instances,
-                &mut material_ids,
-                &mut material_bind_group_allocator,
-            );
-        }
-    }
+            material_instances.insert(entity.into(), material.id());
 
-    for entity in removed_visibilities_query
-        .read()
-        .chain(removed_materials_query.read())
-    {
-        // Only queue a mesh for removal if we didn't pick it up above.
-        // It's possible that a necessary component was removed and re-added in
-        // the same frame.
-        if !changed_meshes_query.contains(entity) {
-            remove_mesh_instance(
-                entity,
-                &mut material_instances,
-                &mut material_ids,
-                &mut material_bind_group_allocator,
-            );
-        }
-    }
-
-    // Adds or updates a mesh instance in the [`RenderMaterialInstances`] and
-    // [`RenderMeshMaterialIds`] arrays.
-    fn add_mesh_instance<M>(
-        entity: Entity,
-        material: &MeshMaterial3d<M>,
-        material_instances: &mut RenderMaterialInstances<M>,
-        material_ids: &mut RenderMeshMaterialIds,
-        material_bind_group_allocator: &mut MaterialBindGroupAllocator<M>,
-    ) where
-        M: Material,
-    {
-        material_instances.insert(entity.into(), material.id());
-
-        // Allocate a slot for this material in the bind group.
-        let material_id = material.id().untyped();
-        material_ids
-            .mesh_to_material
-            .insert(entity.into(), material_id);
-        match material_ids.material_to_binding.entry(material_id) {
-            Entry::Occupied(mut occupied_entry) => {
-                occupied_entry.get_mut().ref_count += 1;
+            // Allocate a slot for this material in the bind group.
+            let material_id = material.id().untyped();
+            material_ids
+                .mesh_to_material
+                .insert(entity.into(), material_id);
+            if let Entry::Vacant(entry) = material_ids.material_to_binding.entry(material_id) {
+                entry.insert(material_bind_group_allocator.allocate());
             }
-            Entry::Vacant(vacant_entry) => {
-                vacant_entry.insert(RenderMaterialBinding {
-                    id: material_bind_group_allocator.allocate(),
-                    ref_count: 1,
-                });
-            }
-        }
-    }
-
-    // Removes a mesh instance from the [`RenderMaterialInstances`] and
-    // [`RenderMeshMaterialIds`] arrays.
-    fn remove_mesh_instance<M>(
-        entity: Entity,
-        material_instances: &mut RenderMaterialInstances<M>,
-        material_ids: &mut RenderMeshMaterialIds,
-        material_bind_group_allocator: &mut MaterialBindGroupAllocator<M>,
-    ) where
-        M: Material,
-    {
-        if material_instances
-            .remove(&MainEntity::from(entity))
-            .is_none()
-        {
-            return;
-        }
-
-        let Some(material_id) = material_ids
-            .mesh_to_material
-            .remove(&MainEntity::from(entity))
-        else {
-            return;
-        };
-
-        let Entry::Occupied(mut occupied_entry) =
-            material_ids.material_to_binding.entry(material_id)
-        else {
-            return;
-        };
-
-        occupied_entry.get_mut().ref_count -= 1;
-        if occupied_entry.get().ref_count == 0 {
-            material_bind_group_allocator.free(occupied_entry.get().id);
-            occupied_entry.remove();
         }
     }
 }
@@ -1136,10 +1039,7 @@ impl<M: Material> RenderAsset for PreparedMaterial<M> {
     ) -> Result<Self, PrepareAssetError<Self::SourceAsset>> {
         // Fetch the material binding ID, so that we can write it in to the
         // `PreparedMaterial`.
-        let Some(RenderMaterialBinding {
-            id: material_binding_id,
-            ..
-        }) = mesh_material_ids
+        let Some(material_binding_id) = mesh_material_ids
             .material_to_binding
             .get(&material_id.untyped())
         else {

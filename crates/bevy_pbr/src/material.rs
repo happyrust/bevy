@@ -1127,6 +1127,24 @@ impl<M: Material> RenderAsset for PreparedMaterial<M> {
             Err(other) => Err(PrepareAssetError::AsBindGroupError(other)),
         }
     }
+
+    fn unload_asset(
+        asset_id: AssetId<Self::SourceAsset>,
+        (_, _, _, mesh_material_ids, ref mut bind_group_allocator, _): &mut SystemParamItem<
+            Self::Param,
+        >,
+    ) {
+        // Mark this material's slot in the binding array as free.
+
+        let Some(material_binding_id) = mesh_material_ids
+            .material_to_binding
+            .get(&asset_id.untyped())
+        else {
+            return;
+        };
+
+        bind_group_allocator.free(*material_binding_id);
+    }
 }
 
 #[derive(Component, Clone, Copy, Default, PartialEq, Eq, Deref, DerefMut)]

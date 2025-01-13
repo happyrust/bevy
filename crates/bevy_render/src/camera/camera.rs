@@ -14,7 +14,7 @@ use crate::{
     texture::GpuImage,
     view::{
         ColorGrading, ExtractedView, ExtractedWindows, Msaa, NoIndirectDrawing, RenderLayers,
-        RenderVisibleEntities, ViewUniformOffset, Visibility, VisibleEntities,
+        RenderVisibleEntities, RetainedViewEntity, ViewUniformOffset, Visibility, VisibleEntities,
     },
     Extract,
 };
@@ -1046,6 +1046,7 @@ pub fn extract_cameras(
     mut commands: Commands,
     query: Extract<
         Query<(
+            Entity,
             RenderEntity,
             &Camera,
             &CameraRenderGraph,
@@ -1066,6 +1067,7 @@ pub fn extract_cameras(
 ) {
     let primary_window = primary_window.iter().next();
     for (
+        main_entity,
         render_entity,
         camera,
         camera_render_graph,
@@ -1152,6 +1154,7 @@ pub fn extract_cameras(
                     hdr: camera.hdr,
                 },
                 ExtractedView {
+                    retained_view_entity: RetainedViewEntity::new(main_entity.into(), 0),
                     clip_from_view: camera.clip_from_view(),
                     world_from_view: *transform,
                     clip_from_world: None,

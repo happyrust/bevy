@@ -45,7 +45,6 @@ use core::ops::Range;
 use derive_more::derive::From;
 use tracing::warn;
 use wgpu::{BlendState, TextureFormat, TextureUsages};
-use bevy_utils::tracing::info;
 
 /// Render viewport configuration for the [`Camera`] component.
 ///

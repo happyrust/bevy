@@ -583,6 +583,7 @@ pub fn check_visibility(
                 // Add the entity to the queue for all visibility classes the
                 // entity is in.
                 for visibility_class_id in visibility_class.iter() {
+                    // dbg!(entity);
                     queue.entry(*visibility_class_id).or_default().push(entity);
                 }
             },
@@ -606,6 +607,7 @@ pub fn check_visibility(
                 }
             }
         }
+        // dbg!(visible_entities.entities.len());
     }
 
     // Now whatever previous visible entities are left are entities that were

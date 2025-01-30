@@ -13,10 +13,8 @@ pub use parallel_scope::*;
 
 use alloc::boxed::Box;
 use core::marker::PhantomData;
-use log::error;
-
-#[cfg(feature = "track_location")]
 use core::panic::Location;
+use log::error;
 
 use crate::{
     self as bevy_ecs,
@@ -685,7 +683,6 @@ impl<'w, 's> Commands<'w, 's> {
         I: IntoIterator<Item = (Entity, B)> + Send + Sync + 'static,
         B: Bundle,
     {
-        #[cfg(feature = "track_location")]
         let caller = Location::caller();
         self.queue(move |world: &mut World| {
             if let Err(invalid_entities) = world.insert_or_spawn_batch_with_caller(
@@ -694,7 +691,7 @@ impl<'w, 's> Commands<'w, 's> {
                 caller,
             ) {
                 error!(
-                    "Failed to 'insert or spawn' bundle of type {} into the following invalid entities: {:?}",
+                    "{caller}: Failed to 'insert or spawn' bundle of type {} into the following invalid entities: {:?}",
                     core::any::type_name::<B>(),
                     invalid_entities
                 );
@@ -1044,6 +1041,7 @@ impl<'w, 's> Commands<'w, 's> {
     /// isn't scoped to specific targets.
     ///
     /// [`Trigger`]: crate::observer::Trigger
+    #[track_caller]
     pub fn trigger(&mut self, event: impl Event) {
         self.queue(command::trigger(event));
     }
@@ -1052,6 +1050,7 @@ impl<'w, 's> Commands<'w, 's> {
     /// watches those targets.
     ///
     /// [`Trigger`]: crate::observer::Trigger
+    #[track_caller]
     pub fn trigger_targets(
         &mut self,
         event: impl Event,
@@ -1602,6 +1601,7 @@ impl<'a> EntityCommands<'a> {
     /// }
     /// # bevy_ecs::system::assert_is_system(remove_combat_stats_system);
     /// ```
+    #[track_caller]
     pub fn remove<T>(&mut self) -> &mut Self
     where
         T: Bundle,
@@ -1679,6 +1679,7 @@ impl<'a> EntityCommands<'a> {
     /// }
     /// # bevy_ecs::system::assert_is_system(remove_with_requires_system);
     /// ```
+    #[track_caller]
     pub fn remove_with_requires<T: Bundle>(&mut self) -> &mut Self {
         self.queue(entity_command::remove_with_requires::<T>())
     }
@@ -1688,11 +1689,13 @@ impl<'a> EntityCommands<'a> {
     /// # Panics
     ///
     /// Panics if the provided [`ComponentId`] does not exist in the [`World`].
+    #[track_caller]
     pub fn remove_by_id(&mut self, component_id: ComponentId) -> &mut Self {
         self.queue(entity_command::remove_by_id(component_id))
     }
 
     /// Removes all components associated with the entity.
+    #[track_caller]
     pub fn clear(&mut self) -> &mut Self {
         self.queue(entity_command::clear())
     }
@@ -1865,6 +1868,7 @@ impl<'a> EntityCommands<'a> {
     /// }
     /// # bevy_ecs::system::assert_is_system(remove_combat_stats_system);
     /// ```
+    #[track_caller]
     pub fn retain<T>(&mut self) -> &mut Self
     where
         T: Bundle,
@@ -2165,6 +2169,38 @@ impl<'a, T: Component> EntityEntryCommands<'a, T> {
             .queue(entity_command::insert_from_world::<T>(InsertMode::Keep));
         self
     }
+
+    /// Get the [`EntityCommands`] from which the [`EntityEntryCommands`] was initiated.
+    ///
+    /// This allows you to continue chaining method calls after calling [`EntityCommands::entry`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use bevy_ecs::prelude::*;
+    /// # #[derive(Resource)]
+    /// # struct PlayerEntity { entity: Entity }
+    /// #[derive(Component)]
+    /// struct Level(u32);
+    ///
+    /// fn level_up_system(mut commands: Commands, player: Res<PlayerEntity>) {
+    ///     commands
+    ///         .entity(player.entity)
+    ///         .entry::<Level>()
+    ///         // Modify the component if it exists
+    ///         .and_modify(|mut lvl| lvl.0 += 1)
+    ///         // Otherwise insert a default value
+    ///         .or_insert(Level(0))
+    ///         // Return the EntityCommands for the entity
+    ///         .entity()
+    ///         // And continue chaining method calls
+    ///         .insert(Name::new("Player"));
+    /// }
+    /// # bevy_ecs::system::assert_is_system(level_up_system);
+    /// ```
+    pub fn entity(&mut self) -> EntityCommands {
+        self.entity_commands.reborrow()
+    }
 }
 
 #[cfg(test)]
@@ -2254,6 +2290,10 @@ mod tests {
         commands.entity(entity).entry::<W<String>>().or_from_world();
         queue.apply(&mut world);
         assert_eq!("*****", &world.get::<W<String>>(entity).unwrap().0);
+        let mut commands = Commands::new(&mut queue, &world);
+        let id = commands.entity(entity).entry::<W<u64>>().entity().id();
+        queue.apply(&mut world);
+        assert_eq!(id, entity);
     }
 
     #[test]

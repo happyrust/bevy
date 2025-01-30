@@ -2,7 +2,7 @@ use alloc::{boxed::Box, vec, vec::Vec};
 use core::any::Any;
 
 use crate::{
-    component::{ComponentHook, ComponentHooks, ComponentId, Mutable, StorageType},
+    component::{ComponentHook, ComponentHooks, ComponentId, HookContext, Mutable, StorageType},
     observer::{ObserverDescriptor, ObserverTrigger},
     prelude::*,
     query::DebugCheckedUnwrap,
@@ -65,31 +65,23 @@ impl Component for ObserverState {
     const STORAGE_TYPE: StorageType = StorageType::SparseSet;
     type Mutability = Mutable;
 
-    // 注册组件生命周期钩子
     fn register_component_hooks(hooks: &mut ComponentHooks) {
-        // 当组件被添加到实体时触发的钩子逻辑
-        hooks.on_add(|mut world, entity, _| {
-            // 将一个观察者注册任务排入命令队列
+        hooks.on_add(|mut world, HookContext { entity, .. }| {
             world.commands().queue(move |world: &mut World| {
-                world.register_observer(entity); // 注册观察者
+                world.register_observer(entity);
             });
         });
-
-        // 当组件从实体中移除时触发的钩子逻辑
-        hooks.on_remove(|mut world, entity, _| {
-            // 从实体的 `ObserverState` 中提取观察者描述符并清空
+        hooks.on_remove(|mut world, HookContext { entity, .. }| {
             let descriptor = core::mem::take(
                 &mut world
-                    .entity_mut(entity) // 获取实体的可变引用
-                    .get_mut::<ObserverState>() // 获取 ObserverState 的可变引用
-                    .unwrap() // 确保存在 ObserverState
-                    .as_mut() // 获取其可变引用
-                    .descriptor, // 提取 descriptor 字段
+                    .entity_mut(entity)
+                    .get_mut::<ObserverState>()
+                    .unwrap()
+                    .as_mut()
+                    .descriptor,
             );
-
-            // 将一个取消注册观察者任务排入命令队列
             world.commands().queue(move |world: &mut World| {
-                world.unregister_observer(entity, descriptor); // 取消注册观察者
+                world.unregister_observer(entity, descriptor);
             });
         });
     }
@@ -326,12 +318,12 @@ impl Component for Observer {
     const STORAGE_TYPE: StorageType = StorageType::SparseSet;
     type Mutability = Mutable;
     fn register_component_hooks(hooks: &mut ComponentHooks) {
-        hooks.on_add(|world, entity, _id| {
-            let Some(observe) = world.get::<Self>(entity) else {
+        hooks.on_add(|world, context| {
+            let Some(observe) = world.get::<Self>(context.entity) else {
                 return;
             };
             let hook = observe.hook_on_add;
-            hook(world, entity, _id);
+            hook(world, context);
         });
     }
 }
@@ -402,8 +394,7 @@ fn observer_system_runner<E: Event, B: Bundle, S: ObserverSystem<E, B>>(
 /// ensure type parameters match.
 fn hook_on_add<E: Event, B: Bundle, S: ObserverSystem<E, B>>(
     mut world: DeferredWorld<'_>,
-    entity: Entity,
-    _: ComponentId,
+    HookContext { entity, .. }: HookContext,
 ) {
     world.commands().queue(move |world: &mut World| {
         let event_id = E::register_component_id(world);

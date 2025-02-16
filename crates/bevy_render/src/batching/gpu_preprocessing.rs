@@ -621,14 +621,15 @@ pub struct PreprocessWorkItem {
     /// The index of the batch input data in the input buffer that the shader
     /// reads from.
     pub input_index: u32,
-    /// The index of the `MeshUniform` in the output buffer that we write to.
-    /// In direct mode, this is the index of the uniform. In indirect mode, this
-    /// is the first index uniform in the batch set.
-    pub output_index: u32,
-    /// The index of the [`IndirectParametersMetadata`] in the
+
+    /// In direct mode, the index of the mesh uniform; in indirect mode, the
+    /// index of the [`IndirectParametersMetadata`].
+    ///
+    /// In indirect mode, this is the index of the
+    /// [`IndirectParametersMetadata`] in the
     /// `IndirectParametersBuffers::indexed_metadata` or
     /// `IndirectParametersBuffers::non_indexed_metadata`.
-    pub indirect_parameters_index: u32,
+    pub output_or_indirect_parameters_index: u32,
 }
 
 /// The `wgpu` indirect parameters structure that specifies a GPU draw command.
@@ -1313,7 +1314,8 @@ pub fn delete_old_work_item_buffers<GFBD>(
 /// is in use. This means comparing metadata needed to draw each phase item and
 /// trying to combine the draws into a batch.
 pub fn batch_and_prepare_sorted_render_phase<I, GFBD>(
-    indirect_parameters_buffers: Res<IndirectParametersBuffers>,
+    mut phase_batched_instance_buffers: ResMut<PhaseBatchedInstanceBuffers<I, GFBD::BufferData>>,
+    mut phase_indirect_parameters_buffers: ResMut<PhaseIndirectParametersBuffers<I>>,
     mut sorted_render_phases: ResMut<ViewSortedRenderPhases<I>>,
     mut views: Query<(
         &ExtractedView,
@@ -1325,19 +1327,13 @@ pub fn batch_and_prepare_sorted_render_phase<I, GFBD>(
     I: CachedRenderPipelinePhaseItem + SortedPhaseItem,
     GFBD: GetFullBatchData,
 {
-    let mut phase_batched_instance_buffers =
-        UntypedPhaseBatchedInstanceBuffers::<GFBD::BufferData>::new();
-    let mut phase_indirect_parameters_buffers = UntypedPhaseIndirectParametersBuffers::new(
-        indirect_parameters_buffers.allow_copies_from_indirect_parameter_buffers,
-    );
-
     // We only process GPU-built batch data in this function.
     let UntypedPhaseBatchedInstanceBuffers {
         ref mut data_buffer,
         ref mut work_item_buffers,
         ref mut late_indexed_indirect_parameters_buffer,
         ref mut late_non_indexed_indirect_parameters_buffer,
-    } = phase_batched_instance_buffers;
+    } = phase_batched_instance_buffers.buffers;
 
     for (extracted_view, no_indirect_drawing, gpu_occlusion_culling) in &mut views {
         let Some(phase) = sorted_render_phases.get_mut(&extracted_view.retained_view_entity) else {
@@ -1362,8 +1358,6 @@ pub fn batch_and_prepare_sorted_render_phase<I, GFBD>(
         // Walk through the list of phase items, building up batches as we go.
         let mut batch: Option<SortedRenderBatch<GFBD>> = None;
 
-        let mut first_output_index = data_buffer.len() as u32;
-
         for current_index in 0..phase.items.len() {
             // Get the index of the input data, and comparison metadata, for
             // this entity.
@@ -1383,7 +1377,7 @@ pub fn batch_and_prepare_sorted_render_phase<I, GFBD>(
                     batch.flush(
                         data_buffer.len() as u32,
                         phase,
-                        &mut phase_indirect_parameters_buffers,
+                        &mut phase_indirect_parameters_buffers.buffers,
                     );
                 }
 
@@ -1409,15 +1403,27 @@ pub fn batch_and_prepare_sorted_render_phase<I, GFBD>(
             if !can_batch {
                 // Break a batch if we need to.
                 if let Some(batch) = batch.take() {
-                    batch.flush(output_index, phase, &mut phase_indirect_parameters_buffers);
+                    batch.flush(
+                        output_index,
+                        phase,
+                        &mut phase_indirect_parameters_buffers.buffers,
+                    );
                 }
 
                 let indirect_parameters_index = if no_indirect_drawing {
                     None
                 } else if item_is_indexed {
-                    Some(phase_indirect_parameters_buffers.allocate_indexed(1))
+                    Some(
+                        phase_indirect_parameters_buffers
+                            .buffers
+                            .allocate_indexed(1),
+                    )
                 } else {
-                    Some(phase_indirect_parameters_buffers.allocate_non_indexed(1))
+                    Some(
+                        phase_indirect_parameters_buffers
+                            .buffers
+                            .allocate_non_indexed(1),
+                    )
                 };
 
                 // Start a new batch.
@@ -1427,7 +1433,7 @@ pub fn batch_and_prepare_sorted_render_phase<I, GFBD>(
                         item_is_indexed,
                         output_index,
                         None,
-                        &mut phase_indirect_parameters_buffers,
+                        &mut phase_indirect_parameters_buffers.buffers,
                         indirect_parameters_index,
                     );
                 };
@@ -1439,8 +1445,6 @@ pub fn batch_and_prepare_sorted_render_phase<I, GFBD>(
                     indirect_parameters_index: indirect_parameters_index.and_then(NonMaxU32::new),
                     meta: current_meta,
                 });
-
-                first_output_index = output_index;
             }
 
             // Add a new preprocessing work item so that the preprocessing
@@ -1450,14 +1454,15 @@ pub fn batch_and_prepare_sorted_render_phase<I, GFBD>(
                     item_is_indexed,
                     PreprocessWorkItem {
                         input_index: current_input_index.into(),
-                        output_index: if no_indirect_drawing {
-                            output_index
-                        } else {
-                            first_output_index
-                        },
-                        indirect_parameters_index: match batch.indirect_parameters_index {
-                            Some(indirect_parameters_index) => indirect_parameters_index.into(),
-                            None => 0,
+                        output_or_indirect_parameters_index: match (
+                            no_indirect_drawing,
+                            batch.indirect_parameters_index,
+                        ) {
+                            (true, _) => output_index,
+                            (false, Some(indirect_parameters_index)) => {
+                                indirect_parameters_index.into()
+                            }
+                            (false, None) => 0,
                         },
                     },
                 );
@@ -1469,7 +1474,7 @@ pub fn batch_and_prepare_sorted_render_phase<I, GFBD>(
             batch.flush(
                 data_buffer.len() as u32,
                 phase,
-                &mut phase_indirect_parameters_buffers,
+                &mut phase_indirect_parameters_buffers.buffers,
             );
         }
     }
@@ -1532,7 +1537,6 @@ pub fn batch_and_prepare_binned_render_phase<BPI, GFBD>(
                 .batch_count(batch_set_key.indexed())
                 as u32;
             for (bin_key, bin) in bins {
-                let first_output_index = data_buffer.len() as u32;
                 let mut batch: Option<BinnedRenderPhaseBatch> = None;
 
                 for (&main_entity, &input_index) in bin.entities() {
@@ -1546,8 +1550,7 @@ pub fn batch_and_prepare_binned_render_phase<BPI, GFBD>(
                                 batch_set_key.indexed(),
                                 PreprocessWorkItem {
                                     input_index: *input_index,
-                                    output_index: first_output_index,
-                                    indirect_parameters_index: match batch.extra_index {
+                                    output_or_indirect_parameters_index: match batch.extra_index {
                                         PhaseItemExtraIndex::IndirectParametersIndex {
                                             ref range,
                                             ..
@@ -1580,8 +1583,7 @@ pub fn batch_and_prepare_binned_render_phase<BPI, GFBD>(
                                 batch_set_key.indexed(),
                                 PreprocessWorkItem {
                                     input_index: *input_index,
-                                    output_index: first_output_index,
-                                    indirect_parameters_index,
+                                    output_or_indirect_parameters_index: indirect_parameters_index,
                                 },
                             );
                             batch = Some(BinnedRenderPhaseBatch {
@@ -1630,8 +1632,6 @@ pub fn batch_and_prepare_binned_render_phase<BPI, GFBD>(
         // Prepare batchables.
 
         for (key, bin) in &phase.batchable_meshes {
-            let first_output_index = data_buffer.len() as u32;
-
             let mut batch: Option<BinnedRenderPhaseBatch> = None;
             for (&main_entity, &input_index) in bin.entities() {
                 let output_index = data_buffer.add() as u32;
@@ -1651,18 +1651,20 @@ pub fn batch_and_prepare_binned_render_phase<BPI, GFBD>(
                             key.0.indexed(),
                             PreprocessWorkItem {
                                 input_index: *input_index,
-                                output_index: if no_indirect_drawing {
-                                    output_index
-                                } else {
-                                    first_output_index
-                                },
-                                indirect_parameters_index: match batch.extra_index {
-                                    PhaseItemExtraIndex::IndirectParametersIndex {
-                                        range: ref indirect_parameters_range,
-                                        ..
-                                    } => indirect_parameters_range.start,
-                                    PhaseItemExtraIndex::DynamicOffset(_)
-                                    | PhaseItemExtraIndex::None => 0,
+                                output_or_indirect_parameters_index: match (
+                                    no_indirect_drawing,
+                                    &batch.extra_index,
+                                ) {
+                                    (true, _) => output_index,
+                                    (
+                                        false,
+                                        PhaseItemExtraIndex::IndirectParametersIndex {
+                                            range: indirect_parameters_range,
+                                            ..
+                                        },
+                                    ) => indirect_parameters_range.start,
+                                    (false, &PhaseItemExtraIndex::DynamicOffset(_))
+                                    | (false, &PhaseItemExtraIndex::None) => 0,
                                 },
                             },
                         );
@@ -1689,8 +1691,7 @@ pub fn batch_and_prepare_binned_render_phase<BPI, GFBD>(
                             key.0.indexed(),
                             PreprocessWorkItem {
                                 input_index: *input_index,
-                                output_index: first_output_index,
-                                indirect_parameters_index,
+                                output_or_indirect_parameters_index: indirect_parameters_index,
                             },
                         );
                         batch = Some(BinnedRenderPhaseBatch {
@@ -1709,8 +1710,7 @@ pub fn batch_and_prepare_binned_render_phase<BPI, GFBD>(
                             key.0.indexed(),
                             PreprocessWorkItem {
                                 input_index: *input_index,
-                                output_index,
-                                indirect_parameters_index: 0,
+                                output_or_indirect_parameters_index: output_index,
                             },
                         );
                         batch = Some(BinnedRenderPhaseBatch {
@@ -1790,8 +1790,7 @@ pub fn batch_and_prepare_binned_render_phase<BPI, GFBD>(
                         key.0.indexed(),
                         PreprocessWorkItem {
                             input_index: input_index.into(),
-                            output_index,
-                            indirect_parameters_index: *indirect_parameters_index,
+                            output_or_indirect_parameters_index: *indirect_parameters_index,
                         },
                     );
                     unbatchables
@@ -1812,8 +1811,7 @@ pub fn batch_and_prepare_binned_render_phase<BPI, GFBD>(
                         key.0.indexed(),
                         PreprocessWorkItem {
                             input_index: input_index.into(),
-                            output_index,
-                            indirect_parameters_index: 0,
+                            output_or_indirect_parameters_index: output_index,
                         },
                     );
                     unbatchables

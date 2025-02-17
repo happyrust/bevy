@@ -67,7 +67,7 @@ impl AccessKitState {
         let root = self.build_root();
         let accesskit_window_id = NodeId(self.entity.to_bits());
         let mut tree = Tree::new(accesskit_window_id);
-        tree.app_name = Some(self.name.clone());
+        tree.toolkit_name = Some(self.name.clone());
         self.requested.set(true);
 
         TreeUpdate {

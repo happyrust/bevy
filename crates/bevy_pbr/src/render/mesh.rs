@@ -8,6 +8,7 @@ use bevy_core_pipeline::{
     prepass::MotionVectorPrepass,
 };
 use bevy_derive::{Deref, DerefMut};
+use bevy_diagnostic::FrameCount;
 use bevy_ecs::{
     prelude::*,
     query::ROQueryItem,
@@ -37,8 +38,8 @@ use bevy_render::{
     renderer::{RenderAdapter, RenderDevice, RenderQueue},
     texture::DefaultImageSampler,
     view::{
-        self, NoFrustumCulling, NoIndirectDrawing, RenderVisibilityRanges, ViewTarget,
-        ViewUniformOffset, ViewVisibility, VisibilityRange,
+        self, NoFrustumCulling, NoIndirectDrawing, RenderVisibilityRanges, RetainedViewEntity,
+        ViewTarget, ViewUniformOffset, ViewVisibility, VisibilityRange,
     },
     Extract,
 };
@@ -317,16 +318,15 @@ impl Plugin for MeshRenderPlugin {
 }
 
 #[derive(Resource, Deref, DerefMut, Default, Debug, Clone)]
-pub struct ViewKeyCache(MainEntityHashMap<MeshPipelineKey>);
+pub struct ViewKeyCache(HashMap<RetainedViewEntity, MeshPipelineKey>);
 
 #[derive(Resource, Deref, DerefMut, Default, Debug, Clone)]
-pub struct ViewSpecializationTicks(MainEntityHashMap<Tick>);
+pub struct ViewSpecializationTicks(HashMap<RetainedViewEntity, Tick>);
 
 pub fn check_views_need_specialization(
     mut view_key_cache: ResMut<ViewKeyCache>,
     mut view_specialization_ticks: ResMut<ViewSpecializationTicks>,
     mut views: Query<(
-        &MainEntity,
         &ExtractedView,
         &Msaa,
         Option<&Tonemapping>,
@@ -352,7 +352,6 @@ pub fn check_views_need_specialization(
     ticks: SystemChangeTick,
 ) {
     for (
-        view_entity,
         view,
         msaa,
         tonemapping,
@@ -444,11 +443,11 @@ pub fn check_views_need_specialization(
             );
         }
         if !view_key_cache
-            .get_mut(view_entity)
+            .get_mut(&view.retained_view_entity)
             .is_some_and(|current_key| *current_key == view_key)
         {
-            view_key_cache.insert(*view_entity, view_key);
-            view_specialization_ticks.insert(*view_entity, ticks.this_run());
+            view_key_cache.insert(view.retained_view_entity, view_key);
+            view_specialization_ticks.insert(view.retained_view_entity, ticks.this_run());
         }
     }
 }
@@ -553,12 +552,18 @@ pub struct MeshInputUniform {
     /// Low 16 bits: index of the material inside the bind group data.
     /// High 16 bits: index of the lightmap in the binding array.
     pub material_and_lightmap_bind_group_slot: u32,
+    /// The number of the frame on which this [`MeshInputUniform`] was built.
+    ///
+    /// This is used to validate the previous transform and skin. If this
+    /// [`MeshInputUniform`] wasn't updated on this frame, then we know that
+    /// neither this mesh's transform nor that of its joints have been updated
+    /// on this frame, and therefore the transforms of both this mesh and its
+    /// joints must be identical to those for the previous frame.
+    pub timestamp: u32,
     /// User supplied tag to identify this mesh instance.
     pub tag: u32,
     /// Padding.
-    pub pad_a: u32,
-    /// Padding.
-    pub pad_b: u32,
+    pub pad: u32,
 }
 
 /// Information about each mesh instance needed to cull it on GPU.
@@ -1119,6 +1124,7 @@ impl RenderMeshInstanceGpuBuilder {
         render_material_bindings: &RenderMaterialBindings,
         render_lightmaps: &RenderLightmaps,
         skin_uniforms: &SkinUniforms,
+        timestamp: FrameCount,
     ) -> u32 {
         let (first_vertex_index, vertex_count) =
             match mesh_allocator.mesh_vertex_slice(&self.shared.mesh_asset_id) {
@@ -1166,6 +1172,7 @@ impl RenderMeshInstanceGpuBuilder {
             lightmap_uv_rect: self.lightmap_uv_rect,
             flags: self.mesh_flags.bits(),
             previous_input_index: u32::MAX,
+            timestamp: timestamp.0,
             first_vertex_index,
             first_index_index,
             index_count: if mesh_is_indexed {
@@ -1178,8 +1185,7 @@ impl RenderMeshInstanceGpuBuilder {
                 self.shared.material_bindings_index.slot,
             ) | ((lightmap_slot as u32) << 16),
             tag: self.shared.tag,
-            pad_a: 0,
-            pad_b: 0,
+            pad: 0,
         };
 
         // Did the last frame contain this entity as well?
@@ -1609,6 +1615,7 @@ pub fn collect_meshes_for_gpu_building(
     render_material_bindings: Res<RenderMaterialBindings>,
     render_lightmaps: Res<RenderLightmaps>,
     skin_uniforms: Res<SkinUniforms>,
+    frame_count: Res<FrameCount>,
 ) {
     let RenderMeshInstances::GpuBuilding(ref mut render_mesh_instances) =
         render_mesh_instances.into_inner()
@@ -1648,6 +1655,7 @@ pub fn collect_meshes_for_gpu_building(
                         &render_material_bindings,
                         &render_lightmaps,
                         &skin_uniforms,
+                        *frame_count,
                     );
                 }
 
@@ -1675,6 +1683,7 @@ pub fn collect_meshes_for_gpu_building(
                         &render_material_bindings,
                         &render_lightmaps,
                         &skin_uniforms,
+                        *frame_count,
                     );
                     mesh_culling_builder
                         .update(&mut mesh_culling_data_buffer, instance_data_index as usize);

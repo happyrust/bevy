@@ -113,6 +113,7 @@ fn run_deferred_prepass<'w>(
     world: &'w World,
     label: &'static str,
 ) -> Result<(), NodeRunError> {
+    // 获取渲染阶段数据，如果未获取到则直接返回
     let (Some(opaque_deferred_phases), Some(alpha_mask_deferred_phases)) = (
         world.get_resource::<ViewBinnedRenderPhases<Opaque3dDeferred>>(),
         world.get_resource::<ViewBinnedRenderPhases<AlphaMask3dDeferred>>(),

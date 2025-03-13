@@ -61,8 +61,8 @@ image = { version = "0.25.2", default-features = false }
 # misc
 bitflags = { version = "2.3", features = ["serde"] }
 bytemuck = { version = "1.5" }
-wgpu-types = { path = "../../../wgpu/wgpu-types", default-features = false }
-wgpu = {  path = "../../../wgpu/wgpu", default-features = false }
+wgpu-types = { git = "https://gitee.com/happydpc/wgpu", default-features = false }
+wgpu = {  git = "https://gitee.com/happydpc/wgpu", default-features = false }
 serde = { version = "1", features = ["derive"] }
 thiserror = { version = "2", default-features = false }
 futures-lite = "2.0.1"

@@ -65,7 +65,7 @@ bevy_input_focus = { path = "../bevy_input_focus", version = "0.16.0-dev", defau
 serde = { version = "1", default-features = false, features = [
   "alloc",
 ], optional = true }
-accesskit = { path = "../../../accesskit/common", default-features = false}
+accesskit = { git = "https://gitee.com/happydpc/accesskit.git", default-features = false}
 
 [lints]
 workspace = true

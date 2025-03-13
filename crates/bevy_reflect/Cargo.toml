@@ -111,7 +111,7 @@ uuid = { version = "1.13.1", default-features = false, optional = true, features
   "serde",
 ] }
 variadics_please = "1.1"
-wgpu-types = { path = "../../../wgpu/wgpu-types", features = ["serde"], optional = true }
+wgpu-types = { git = "https://gitee.com/happydpc/wgpu", features = ["serde"], optional = true }
 
 [dev-dependencies]
 ron = "0.8.0"

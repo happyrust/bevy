@@ -116,6 +116,7 @@ impl DeactivationHandler for WinitDeactivationHandler {
 
 /// Prepares accessibility for a winit window.
 pub(crate) fn prepare_accessibility_for_window(
+    event_loop: &winit::event_loop::ActiveEventLoop,
     winit_window: &winit::window::Window,
     entity: Entity,
     name: String,
@@ -131,6 +132,7 @@ pub(crate) fn prepare_accessibility_for_window(
     let deactivation_handler = WinitDeactivationHandler;
 
     let adapter = Adapter::with_direct_handlers(
+        event_loop,
         winit_window,
         activation_handler,
         action_handler,

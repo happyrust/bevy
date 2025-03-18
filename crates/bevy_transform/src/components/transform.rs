@@ -62,18 +62,18 @@ fn assert_is_normalized(message: &str, length_squared: f32) {
 ///
 /// [transform_example]: https://github.com/bevyengine/bevy/blob/latest/examples/transforms/transform.rs
 #[derive(Debug, PartialEq, Clone, Copy)]
-#[cfg_attr(
-    feature = "bevy-support",
-    derive(Component),
-    require(GlobalTransform, TransformTreeChanged)
-)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize, rkyv::Archive,
     rkyv::Deserialize,
     rkyv::Serialize))]
+#[cfg_attr(feature = "bevy-support", derive(Component), require(GlobalTransform))]
 #[cfg_attr(
     feature = "bevy_reflect",
     derive(Reflect),
     reflect(Component, Default, PartialEq, Debug, Clone)
+)]
+#[cfg_attr(
+    all(feature = "bevy_reflect", feature = "serialize"),
+    reflect(Serialize, Deserialize)
 )]
 pub struct Transform {
     /// Position of the entity. In 2d, the last value of the `Vec3` is used for z-ordering.

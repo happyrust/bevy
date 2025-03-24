@@ -325,7 +325,7 @@ pub fn prepare_assets<A: RenderAsset>(
             // we could check if available bytes > byte_len here, but we want to make some
             // forward progress even if the asset is larger than the max bytes per frame.
             // this way we always write at least one (sized) asset per frame.
-            // in future we could also consider partial asset uploads.
+            // in the future, we could also consider partial asset uploads.
             if bpf.exhausted() {
                 prepare_next_frame.assets.push((id, extracted_asset));
                 continue;

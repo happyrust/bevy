@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 keywords = ["bevy"]
 
 [features]
+default = ["x11"]
 trace = []
 wayland = ["winit/wayland", "winit/wayland-csd-adwaita"]
 x11 = ["winit/x11"]
@@ -62,12 +63,6 @@ bytemuck = { version = "1.5", optional = true }
 wgpu-types = { git = "https://gitee.com/happydpc/wgpu", optional = true }
 accesskit = { git = "https://gitee.com/happydpc/accesskit.git" }
 tracing = { version = "0.1", default-features = false, features = ["std"] }
-
-[target.'cfg(target_os = "android")'.dependencies]
-winit = { git = "https://gitee.com/happydpc/winit.git", default-features = false, features = [
-  "android-native-activity",
-  "rwh_06",
-] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { version = "0.2" }

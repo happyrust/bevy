@@ -17,14 +17,35 @@ Aim to communicate:
 
 Keep it short and sweet:
 
-- Use bullet points and make sure it's searchable.
+- What, then why, then how to migrate.
+- Some helpful standardized phrases:
+  - `OldType` is now `NewType`. Replace all references and imports.
+  - The `Struct::method()` method now requires an additional `magnitude: f32` argument.
+  - `Enum` has a new variant, `Enum::NewVariant`, which must be handled during `match` statements.
+  - The `Type::method` method has been removed. Use `Type::other_method` instead.
+  - The `crate::old_module` module is now `crate::new_module`. Update your imports.
+  - `function` now returns `Option<String>`, instead of `String`.
+- Make sure it's searchable by directly naming the types and methods involved.
+- Use backticks for types, methods and modules (e.g. `Vec<T>` or `core::mem::swap`).
+- Use bullet points to explain complex changes.
 - Avoid headings. If you must, use only level-two headings.
-- Use backticks for types (e.g. `Vec<T>`) in either the title or the body.
-- Diff codeblocks can also be useful for succinctly communicating changes.
-
-```diff
-fn my_system(world: &mut World) {
-+ world.new_method();
-- world.old_method();
-}
-```
+- Diff codeblocks can be useful for succinctly communicating changes.
+  
+  ```diff
+   fn my_system(world: &mut World) {
+  +    world.new_method();
+  -    world.old_method();
+   }
+  ```
+  
+- Make sure to reference the currently published version of a crate when writing a migration guide.
+  See [docs.rs](https://docs.rs/) for a quick reference to the existing public API.
+- When moving items to a new module or crate, consider a simple table listing
+  the moved items and the before and after paths.
+  For example, _`Foo` has been moved from `bar::foo` to `baz`_ could be written:
+  
+  **Relocations**
+  
+  | Item                         | Old Path                       | New Path                       |
+  | ---------------------------- | ------------------------------ | ------------------------------ |
+  | `Foo`                        | `bar::foo`                     | `baz`                          |

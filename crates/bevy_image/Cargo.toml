@@ -67,7 +67,7 @@ wgpu-types = { git = "https://gitee.com/happydpc/wgpu", default-features = false
 wgpu = {  git = "https://gitee.com/happydpc/wgpu", default-features = false }
 serde = { version = "1", features = ["derive"] }
 thiserror = { version = "2", default-features = false }
-futures-lite = "2.0.1"
+futures-lite = "2.6"
 guillotiere = "0.6.0"
 rectangle-pack = "0.4"
 ddsfile = { version = "0.5.2", optional = true }

@@ -84,6 +84,9 @@
       <sourceFolder url="file://$MODULE_DIR$/tools/build-easefunction-graphs/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tools/compile_fail_utils/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tools/compile_fail_utils/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/bevy_anti_aliasing/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/bevy_platform/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/no_std/library/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

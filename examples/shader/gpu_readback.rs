@@ -15,7 +15,7 @@ use bevy::{
         renderer::{RenderContext, RenderDevice},
         storage::{GpuShaderStorageBuffer, ShaderStorageBuffer},
         texture::GpuImage,
-        Render, RenderApp, RenderSet, ExtractSchedule,
+        Render, RenderApp, RenderSystems, ExtractSchedule,
     },
 };
 use bevy_render::Extract;
@@ -51,7 +51,7 @@ impl Plugin for GpuReadbackPlugin {
         render_app.init_resource::<ComputePipeline>().add_systems(
             Render,
             prepare_bind_group
-                .in_set(RenderSet::PrepareBindGroups)
+                .in_set(RenderSystems::PrepareBindGroups)
                 // We don't need to recreate the bind group every frame
                 .run_if(not(resource_exists::<GpuBufferBindGroup>)),
         );
@@ -257,14 +257,14 @@ impl Plugin for OneTimePipelinePlugin {
 
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
-        
+
         // 在渲染世界初始化，添加提取插件
         render_app
             .init_resource::<RenderPipelineState>()
             .add_systems(ExtractSchedule, extract_pipeline_state)  // 添加提取系统
             .add_systems(Render, update_render_state.in_set(RenderSet::Queue))  // 重命名系统以避免混淆
             .add_systems(Render, mark_as_executed.in_set(RenderSet::Cleanup));
-            
+
         // 添加渲染节点
         render_app
             .world_mut()
@@ -282,14 +282,14 @@ impl Node for OneTimeRenderNode {
         world: &World,
     ) -> Result<(), NodeRunError> {
         let state = world.resource::<RenderPipelineState>();
-        
+
         if state.should_execute && !state.has_executed {
             // 执行一次性渲染逻辑
             info!("执行一次性渲染管线！");
-            
+
             // 渲染代码...
         }
-        
+
         Ok(())
     }
 }
@@ -333,7 +333,7 @@ fn mark_as_executed(
 ) {
     if render_state.should_execute && !render_state.has_executed {
         render_state.has_executed = true;
-        
+
         // 使用命令队列修改主世界资源，避免直接访问冲突
         // 注意：这只会更新渲染世界中的提取资源副本，而不是主世界中的原始资源
         // 在下一帧，主世界资源会再次被提取，所以需要在主世界中也更新状态

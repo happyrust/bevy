@@ -7,7 +7,7 @@ use bevy::{
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         gpu_readback::{Readback, ReadbackComplete},
         render_asset::{RenderAssetUsages, RenderAssets},
-        render_graph::{self, RenderGraph, RenderLabel},
+        render_graph::{self, Node, NodeRunError, RenderGraphContext, RenderLabel},
         render_resource::{
             binding_types::{storage_buffer, texture_storage_2d},
             *,
@@ -15,9 +15,11 @@ use bevy::{
         renderer::{RenderContext, RenderDevice},
         storage::{GpuShaderStorageBuffer, ShaderStorageBuffer},
         texture::GpuImage,
-        Render, RenderApp, RenderSystems,
+        Render, RenderApp, RenderSystems, ExtractSchedule,
     },
 };
+use bevy_render::Extract;
+use bevy_render::render_graph::RenderGraph;
 
 /// This example uses a shader source file from the assets subdirectory
 const SHADER_ASSET_PATH: &str = "shaders/gpu_readback.wgsl";
@@ -30,6 +32,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             GpuReadbackPlugin,
+            OneTimePipelinePlugin,
             ExtractResourcePlugin::<ReadbackBuffer>::default(),
             ExtractResourcePlugin::<ReadbackImage>::default(),
         ))
@@ -218,5 +221,127 @@ impl render_graph::Node for ComputeNode {
             pass.dispatch_workgroups(BUFFER_LEN as u32, 1, 1);
         }
         Ok(())
+    }
+}
+
+// 1. 为主世界和渲染世界分别创建资源
+#[derive(Resource, Clone, Default, ExtractResource)]  // 添加 ExtractResource 特性
+struct MainPipelineState {
+    should_execute: bool,
+    has_executed: bool,
+}
+
+#[derive(Resource, Default)]
+struct RenderPipelineState {
+    should_execute: bool,
+    has_executed: bool,
+}
+
+// 2. 修改插件实现
+pub struct OneTimePipelinePlugin;
+
+// 添加渲染节点标签定义
+#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+struct OneTimePipelineNode;
+
+// 添加渲染节点结构体
+#[derive(Default)]
+struct OneTimeRenderNode {}
+
+impl Plugin for OneTimePipelinePlugin {
+    fn build(&self, app: &mut App) {
+        // 在主世界初始化
+        app.init_resource::<MainPipelineState>()
+           .add_systems(Update, check_keyboard_input);
+    }
+
+    fn finish(&self, app: &mut App) {
+        let render_app = app.sub_app_mut(RenderApp);
+
+        // 在渲染世界初始化，添加提取插件
+        render_app
+            .init_resource::<RenderPipelineState>()
+            .add_systems(ExtractSchedule, extract_pipeline_state)  // 添加提取系统
+            .add_systems(Render, update_render_state.in_set(RenderSet::Queue))  // 重命名系统以避免混淆
+            .add_systems(Render, mark_as_executed.in_set(RenderSet::Cleanup));
+
+        // 添加渲染节点
+        render_app
+            .world_mut()
+            .resource_mut::<RenderGraph>()
+            .add_node(OneTimePipelineNode, OneTimeRenderNode::default());
+    }
+}
+
+// 3. 修改渲染节点实现
+impl Node for OneTimeRenderNode {
+    fn run(
+        &self,
+        _graph: &mut RenderGraphContext,
+        render_context: &mut RenderContext,
+        world: &World,
+    ) -> Result<(), NodeRunError> {
+        let state = world.resource::<RenderPipelineState>();
+
+        if state.should_execute && !state.has_executed {
+            // 执行一次性渲染逻辑
+            info!("执行一次性渲染管线！");
+
+            // 渲染代码...
+        }
+
+        Ok(())
+    }
+}
+
+// 4. 监听键盘触发渲染
+fn check_keyboard_input(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut state: ResMut<MainPipelineState>,
+) {
+    if keyboard_input.just_pressed(KeyCode::Space) {
+        info!("触发一次性渲染管线！");
+        state.should_execute = true;
+        state.has_executed = false;
+    }
+}
+
+// 5. 添加提取系统 - 从主世界提取到渲染世界
+fn extract_pipeline_state(
+    mut commands: Commands,
+    main_state: Extract<Res<MainPipelineState>>,
+) {
+    // 提取主世界资源到渲染世界
+    commands.insert_resource(main_state.clone());
+}
+
+// 6. 更新渲染状态 - 使用提取的主世界状态更新渲染世界状态
+fn update_render_state(
+    main_state: Res<MainPipelineState>,  // 现在这是渲染世界中的提取资源
+    mut render_state: ResMut<RenderPipelineState>,
+) {
+    // 从提取的主世界状态更新渲染世界状态
+    render_state.should_execute = main_state.should_execute;
+    render_state.has_executed = main_state.has_executed;
+}
+
+// 7. 标记渲染已执行
+fn mark_as_executed(
+    mut render_state: ResMut<RenderPipelineState>,
+    mut commands: Commands,
+    mut main_state: ResMut<MainPipelineState>,  // 现在这是渲染世界中的提取资源
+) {
+    if render_state.should_execute && !render_state.has_executed {
+        render_state.has_executed = true;
+
+        // 使用命令队列修改主世界资源，避免直接访问冲突
+        // 注意：这只会更新渲染世界中的提取资源副本，而不是主世界中的原始资源
+        // 在下一帧，主世界资源会再次被提取，所以需要在主世界中也更新状态
+        // commands.insert_resource(MainPipelineState {
+        //     should_execute: false,
+        //     has_executed: true,
+        // });
+        // main_state.should_execute = false;
+        // main_state.has_executed = true;
     }
 }

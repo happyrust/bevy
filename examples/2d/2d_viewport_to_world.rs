@@ -108,7 +108,7 @@ fn controls(
             viewport.physical_position.x += uspeed;
         }
 
-        // Bound viewport position so it doesn't go off-screen
+        // Bound the viewport position so it doesn't go off-screen
         viewport.physical_position = viewport
             .physical_position
             .min(window_size - viewport.physical_size);

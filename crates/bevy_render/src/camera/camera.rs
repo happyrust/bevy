@@ -136,9 +136,9 @@ impl Viewport {
 /// - Camera D: `full_size` = 3840x2160, `size` = 1920x1080, `offset` =
 ///   1920,1080
 ///
-/// However since only the ratio between the values is important, they could all
-/// be divided by 120 and still produce the same image. Camera D would for
-/// example have the following values:
+/// However, since only the ratio between the values is important, they could all
+/// be divided by 120 and still produce the same image. Camera D would, for example,
+///  have the following values:
 /// `full_size` = 32x18, `size` = 16x9, `offset` = 16,9
 #[derive(Debug, Clone, Copy, Reflect, PartialEq)]
 #[reflect(Clone, PartialEq, Default)]

@@ -187,7 +187,6 @@ fn create_roi_projection_matrix(
 
     // 创建最终变换矩阵
     // 首先缩放，然后平移
-    //let scale_mat = Mat4::from_scale(Vec3::new(1.0 / scale_factor.x, 1.0 / scale_factor.y, 1.0));
     let scale_mat = Mat4::from_scale(Vec3::new(scale_factor.x, scale_factor.y, 1.0));
     let translation_mat = Mat4::from_translation(Vec3::new(center_offset.x, center_offset.y, 0.0));
 

@@ -13,6 +13,7 @@
 use std::ops::Range;
 
 use bevy::{
+    color::palettes::css::GOLD,
     core_pipeline::core_3d::graph::{Core3d, Node3d},
     ecs::{
         query::QueryItem,
@@ -33,10 +34,10 @@ use bevy::{
             },
             GetBatchData, GetFullBatchData,
         },
-        camera::ExtractedCamera,
+        camera::{ExtractedCamera, RenderTarget, Viewport},
         extract_component::{ExtractComponent, ExtractComponentPlugin},
         mesh::{allocator::MeshAllocator, MeshVertexBufferLayoutRef, RenderMesh},
-        render_asset::RenderAssets,
+        render_asset::{RenderAssetUsages, RenderAssets},
         render_graph::{
             NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
         },
@@ -50,28 +51,183 @@ use bevy::{
             MultisampleState, PipelineCache, PolygonMode, PrimitiveState, RenderPassDescriptor,
             RenderPipelineDescriptor, SpecializedMeshPipeline, SpecializedMeshPipelineError,
             SpecializedMeshPipelines, TextureFormat, VertexState,
+            Extent3d, TextureDimension, TextureUsages,
         },
         renderer::RenderContext,
         sync_world::MainEntity,
         view::{ExtractedView, RenderVisibleEntities, RetainedViewEntity, ViewTarget},
         Extract, Render, RenderApp, RenderDebugFlags, RenderSystems,
     },
+    window::WindowResized,
 };
+use bevy_image::BevyDefault;
 use nonmax::NonMaxU32;
 
 const SHADER_ASSET_PATH: &str = "shaders/custom_stencil.wgsl";
+// 小相机纹理大小
+const MINI_CAMERA_SIZE: u32 = 64;
+
+// 存储鼠标和小窗口信息的资源
+#[derive(Resource, Default)]
+struct MouseInfo {
+    position: Vec2,
+    mini_window_pos: UVec2,
+    mini_window_size: UVec2,
+}
 
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, MeshStencilPhasePlugin))
-        .add_systems(Startup, setup)
+        .init_resource::<MouseInfo>()
+        .add_systems(Startup, (setup, setup_ui))
+        .add_systems(Update, (update_mini_camera, handle_window_resize, update_ui_text))
         .run();
+}
+
+// 小相机组件
+#[derive(Component, ExtractComponent, Clone)]
+struct MiniCamera;
+
+// 标记小相机的子视图索引
+const MINI_CAMERA_SUBVIEW_INDEX: u32 = 1;
+
+// UI组件标记
+#[derive(Component)]
+struct MouseInfoText;
+
+// 给不同类型的文本添加标记组件
+#[derive(Component)]
+struct MousePositionValue;
+
+#[derive(Component)]
+struct WindowPositionValue;
+
+#[derive(Component)]
+struct WindowSizeValue;
+
+// 设置UI界面
+fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // 加载支持中文的字体
+    let font = asset_server.load("fonts/FiraSans-Bold.ttf");
+    
+    // UI相机 - 设置高优先级，确保UI绘制在最上层
+    commands.spawn((
+        Camera2d,
+        Camera {
+            // 设置UI相机优先级为2，确保在3D相机和小相机之后渲染
+            order: 2,
+            ..default()
+        },
+    ));
+    
+    // 创建文本显示鼠标坐标和小窗口信息
+    commands.spawn((
+        // 基础文本
+        Text::new("鼠标位置: "),
+        TextFont {
+            font: font.clone(),
+            font_size: 24.0,
+            ..default()
+        },
+        // 定位到左上角
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(10.0),
+            left: Val::Px(10.0),
+            ..default()
+        },
+        MouseInfoText,
+    ))
+    .with_child((
+        // 鼠标位置值
+        TextSpan::new("(0, 0)"),
+        TextColor(GOLD.into()),
+        TextFont {
+            font: font.clone(),
+            font_size: 24.0,
+            ..default()
+        },
+        MousePositionValue,
+    ))
+    .with_child((
+        // 小窗口位置标签
+        TextSpan::new("\n小窗口位置: "),
+        TextColor::default(),
+        TextFont {
+            font: font.clone(),
+            font_size: 24.0,
+            ..default()
+        },
+    ))
+    .with_child((
+        // 小窗口位置值
+        TextSpan::new("(0, 0)"),
+        TextColor(GOLD.into()),
+        TextFont {
+            font: font.clone(),
+            font_size: 24.0,
+            ..default()
+        },
+        WindowPositionValue,
+    ))
+    .with_child((
+        // 小窗口大小标签
+        TextSpan::new("\n小窗口大小: "),
+        TextColor::default(),
+        TextFont {
+            font: font.clone(),
+            font_size: 24.0,
+            ..default()
+        },
+    ))
+    .with_child((
+        // 小窗口大小值
+        TextSpan::new(format!("{}x{}", MINI_CAMERA_SIZE, MINI_CAMERA_SIZE)),
+        TextColor(GOLD.into()),
+        TextFont {
+            font: font.clone(),
+            font_size: 24.0,
+            ..default()
+        },
+        WindowSizeValue,
+    ));
+}
+
+// 更新UI文本显示
+fn update_ui_text(
+    mouse_info: Res<MouseInfo>,
+    mut mouse_pos_query: Query<&mut TextSpan, With<MousePositionValue>>,
+    mut window_pos_query: Query<&mut TextSpan, (With<WindowPositionValue>, Without<MousePositionValue>)>,
+    mut window_size_query: Query<&mut TextSpan, (With<WindowSizeValue>, Without<MousePositionValue>, Without<WindowPositionValue>)>,
+) {
+    // 更新鼠标位置文本
+    if let Ok(mut text_span) = mouse_pos_query.single_mut() {
+        **text_span = format!("({:.1}, {:.1})", mouse_info.position.x, mouse_info.position.y);
+    }
+    
+    // 更新小窗口位置文本
+    if let Ok(mut text_span) = window_pos_query.single_mut() {
+        **text_span = format!("({}, {})", mouse_info.mini_window_pos.x, mouse_info.mini_window_pos.y);
+    }
+    
+    // 更新小窗口大小文本
+    if let Ok(mut text_span) = window_size_query.single_mut() {
+        **text_span = format!("{}x{}", mouse_info.mini_window_size.x, mouse_info.mini_window_size.y);
+    }
+}
+
+// 用于渲染目标的资源
+#[derive(Resource)]
+struct MiniCameraTarget {
+    texture: Handle<Image>,
+    size: UVec2,
 }
 
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     // circular base
     commands.spawn((
@@ -79,17 +235,15 @@ fn setup(
         MeshMaterial3d(materials.add(Color::WHITE)),
         Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
     ));
+    
     // cube
-    // This cube will be rendered by the main pass, but it will also be rendered by our custom
-    // pass. This should result in an unlit red cube
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
         MeshMaterial3d(materials.add(Color::srgb_u8(124, 144, 255))),
         Transform::from_xyz(0.0, 0.5, 0.0),
-        // This marker component is used to identify which mesh will be used in our custom pass
-        // The circle doesn't have it so it won't be rendered in our pass
         DrawStencil,
     ));
+    
     // light
     commands.spawn((
         PointLight {
@@ -98,13 +252,166 @@ fn setup(
         },
         Transform::from_xyz(4.0, 8.0, 4.0),
     ));
-    // camera
+    
+    // 创建小相机的渲染目标纹理
+    let size = UVec2::new(MINI_CAMERA_SIZE, MINI_CAMERA_SIZE);
+    let mut mini_camera_texture = Image::new_fill(
+        Extent3d {
+            width: size.x,
+            height: size.y,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        &[0, 0, 0, 255],
+        TextureFormat::bevy_default(),
+        RenderAssetUsages::default(),
+    );
+    mini_camera_texture.texture_descriptor.usage = TextureUsages::TEXTURE_BINDING 
+                                                | TextureUsages::COPY_DST 
+                                                | TextureUsages::RENDER_ATTACHMENT;
+    let mini_camera_texture_handle = images.add(mini_camera_texture);
+    
+    // 小相机
     commands.spawn((
-        Camera3d::default(),
+        Camera3d {
+            // 小相机基础设置
+            ..default()
+        },
+        Camera {
+            // 设置相机的viewport大小为64x64
+            viewport: Some(Viewport {
+                physical_position: UVec2::new(0, 0),
+                physical_size: size,
+                ..default()
+            }),
+            target: RenderTarget::Image(mini_camera_texture_handle.clone().into()),
+            // 设置渲染顺序，让它在主相机之后渲染
+            order: 1,
+            // 设置小相机的清除颜色为红色，以便能清楚地区分
+            clear_color: ClearColorConfig::Custom(Color::srgb(0.5, 0.0, 0.0)),
+            ..default()
+        },
         Transform::from_xyz(-2.0, 4.5, 9.0).looking_at(Vec3::ZERO, Vec3::Y),
-        // disable msaa for simplicity
+        MiniCamera,
+    ));
+    
+    // 主相机 - 设置明显的背景色，以便区分
+    commands.spawn((
+        Camera3d {
+            ..default()
+        },
+        Camera {
+            // 设置主相机的清除颜色为深蓝色 
+            clear_color: ClearColorConfig::Custom(Color::srgb(0.0, 0.0, 0.4)),
+            ..default()
+        },
+        Transform::from_xyz(-2.0, 4.5, 9.0).looking_at(Vec3::ZERO, Vec3::Y),
         Msaa::Off,
     ));
+
+    // 创建一个带有小相机纹理的平面，显示在场景中
+    let mini_texture_material = materials.add(StandardMaterial {
+        base_color_texture: Some(mini_camera_texture_handle.clone()),
+        unlit: true, // 使其不受灯光影响
+        ..default()
+    });
+    commands.spawn((
+        Mesh3d(meshes.add(Rectangle::new(1.0, 1.0))),
+        MeshMaterial3d(mini_texture_material),
+        Transform::from_xyz(2.0, 2.0, 0.0),
+    ));
+    
+    // 存储小相机渲染目标
+    commands.insert_resource(MiniCameraTarget {
+        texture: mini_camera_texture_handle,
+        size,
+    });
+}
+
+// 更新小相机位置跟随鼠标
+fn update_mini_camera(
+    mut mini_camera_query: Query<(&mut Camera, &mut Transform), With<MiniCamera>>,
+    windows: Query<&Window>,
+    main_camera_query: Query<(Entity, &Camera, &Camera3d, &GlobalTransform), Without<MiniCamera>>,
+    mut mouse_info: ResMut<MouseInfo>,
+) {
+    // 获取主窗口和主相机
+    let Ok(window) = windows.single() else { return };
+    let Ok((_, _, _, main_camera_transform)) = main_camera_query.single() else { return };
+    
+    if let Some(cursor_position) = window.cursor_position() {
+        // 更新鼠标信息资源，并打印调试信息
+        mouse_info.position = cursor_position;
+        // println!("鼠标位置更新: ({:.1}, {:.1})", cursor_position.x, cursor_position.y);
+        
+        // 鼠标在屏幕上的位置（像素坐标）
+        let mouse_pos = UVec2::new(cursor_position.x as u32, cursor_position.y as u32);
+        
+        // 计算鼠标区域周围的视口区域（64x64像素）
+        let offset = UVec2::new(MINI_CAMERA_SIZE / 2, MINI_CAMERA_SIZE / 2);
+        let left = mouse_pos.x.saturating_sub(offset.x);
+        let top = mouse_pos.y.saturating_sub(offset.y);
+        
+        // 获取窗口尺寸
+        let window_size = UVec2::new(window.width() as u32, window.height() as u32);
+        
+        // 确保视口位置不会超出屏幕
+        let max_x = window_size.x.saturating_sub(MINI_CAMERA_SIZE);
+        let max_y = window_size.y.saturating_sub(MINI_CAMERA_SIZE);
+        let clamped_left = left.min(max_x);
+        let clamped_top = top.min(max_y);
+        
+        // 更新小相机视口位置信息
+        let mini_window_pos = UVec2::new(clamped_left, clamped_top);
+        mouse_info.mini_window_pos = mini_window_pos;
+        mouse_info.mini_window_size = UVec2::new(MINI_CAMERA_SIZE, MINI_CAMERA_SIZE);
+        
+        // 更新小相机
+        for (mut mini_camera, mut mini_camera_transform) in mini_camera_query.iter_mut() {
+            // 1. 设置小相机的基本位置与主相机相同
+            mini_camera_transform.translation = main_camera_transform.translation();
+            
+            // 2. 设置小相机视口区域 - 限制为鼠标周围的64x64像素窗口
+            if let Some(viewport) = mini_camera.viewport.as_mut() {
+                viewport.physical_position = mini_window_pos;
+                viewport.physical_size = mouse_info.mini_window_size;
+            }
+            
+            // // 3. 根据鼠标位置和窗口大小计算鼠标在屏幕空间的归一化坐标
+            // let norm_x = cursor_position.x / window.width();
+            // let norm_y = cursor_position.y / window.height();
+            
+            // // 5. 创建简单的旋转效果 - 让小相机首先朝向场景中心，然后根据鼠标位置稍微旋转
+            
+            // // 先让相机朝向场景中心
+            // mini_camera_transform.look_at(Vec3::ZERO, Vec3::Y);
+            
+            // // 然后根据鼠标位置进行微调
+            // let angle_x = (norm_x - 0.5) * 0.2;
+            // let angle_y = (norm_y - 0.5) * 0.2;
+            
+            // // 应用旋转调整 - 水平方向
+            // mini_camera_transform.rotate_y(angle_x);
+            
+            // // 应用旋转调整 - 垂直方向
+            // mini_camera_transform.rotate_x(-angle_y);
+        }
+    }
+}
+
+// 处理窗口尺寸变更
+fn handle_window_resize(
+    mut resize_events: EventReader<WindowResized>,
+    mut mini_camera_query: Query<&mut Camera, With<MiniCamera>>,
+) {
+    for _ in resize_events.read() {
+        // 窗口大小变化时确保小相机viewport保持正确尺寸
+        for mut camera in mini_camera_query.iter_mut() {
+            if let Some(viewport) = camera.viewport.as_mut() {
+                viewport.physical_size = UVec2::new(MINI_CAMERA_SIZE, MINI_CAMERA_SIZE);
+            }
+        }
+    }
 }
 
 #[derive(Component, ExtractComponent, Clone, Copy, Default)]
@@ -113,10 +420,10 @@ struct DrawStencil;
 struct MeshStencilPhasePlugin;
 impl Plugin for MeshStencilPhasePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((
-            ExtractComponentPlugin::<DrawStencil>::default(),
-            SortedRenderPhasePlugin::<Stencil3d, MeshPipeline>::new(RenderDebugFlags::default()),
-        ));
+        app.add_plugins(ExtractComponentPlugin::<DrawStencil>::default())
+           .add_plugins(ExtractComponentPlugin::<MiniCamera>::default())
+           .add_plugins(SortedRenderPhasePlugin::<Stencil3d, MeshPipeline>::new(RenderDebugFlags::default()));
+        
         // We need to get the render app from the main app
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
@@ -126,7 +433,7 @@ impl Plugin for MeshStencilPhasePlugin {
             .init_resource::<DrawFunctions<Stencil3d>>()
             .add_render_command::<Stencil3d, DrawMesh3dStencil>()
             .init_resource::<ViewSortedRenderPhases<Stencil3d>>()
-            .add_systems(ExtractSchedule, extract_camera_phases)
+            .add_systems(ExtractSchedule, (extract_camera_phases, extract_mini_camera_target))
             .add_systems(
                 Render,
                 (
@@ -470,25 +777,47 @@ impl GetFullBatchData for StencilPipeline {
     }
 }
 
+// 提取小相机渲染目标
+#[derive(Resource)]
+struct ExtractedMiniCameraTarget {
+    image_handle: Handle<Image>,
+    size: UVec2,
+}
+
+fn extract_mini_camera_target(
+    mini_camera_target: Extract<Res<MiniCameraTarget>>,
+    mut commands: Commands,
+) {
+    commands.insert_resource(ExtractedMiniCameraTarget {
+        image_handle: mini_camera_target.texture.clone(),
+        size: mini_camera_target.size,
+    });
+}
+
 // When defining a phase, we need to extract it from the main world and add it to a resource
 // that will be used by the render world. We need to give that resource all views that will use
 // that phase
 fn extract_camera_phases(
     mut stencil_phases: ResMut<ViewSortedRenderPhases<Stencil3d>>,
-    cameras: Extract<Query<(Entity, &Camera), With<Camera3d>>>,
+    _cameras: Extract<Query<(Entity, &Camera), With<Camera3d>>>,
+    mini_cameras: Extract<Query<Entity, With<MiniCamera>>>,
     mut live_entities: Local<HashSet<RetainedViewEntity>>,
 ) {
     live_entities.clear();
-    for (main_entity, camera) in &cameras {
-        if !camera.is_active {
-            continue;
-        }
-        // This is the main camera, so we use the first subview index (0)
-        let retained_view_entity = RetainedViewEntity::new(main_entity.into(), None, 0);
-
+    
+    // 只提取小相机 - 我们只在小相机中渲染stencil效果
+    for mini_camera_entity in mini_cameras.iter() {
+        // 为小相机创建视图实体，用独特的子视图索引区分它
+        let retained_view_entity = RetainedViewEntity::new(
+            mini_camera_entity.into(), 
+            None, 
+            MINI_CAMERA_SUBVIEW_INDEX
+        );
         stencil_phases.insert_or_clear(retained_view_entity);
         live_entities.insert(retained_view_entity);
     }
+
+    // 我们不再需要为普通相机创建stencil阶段，因为我们只在小相机视图中渲染
 
     // Clear out all dead views.
     stencil_phases.retain(|camera_entity, _| live_entities.contains(camera_entity));
@@ -505,10 +834,18 @@ fn queue_custom_meshes(
     render_meshes: Res<RenderAssets<RenderMesh>>,
     render_mesh_instances: Res<RenderMeshInstances>,
     mut custom_render_phases: ResMut<ViewSortedRenderPhases<Stencil3d>>,
-    mut views: Query<(&ExtractedView, &RenderVisibleEntities, &Msaa)>,
+    mut views: Query<(Entity, &ExtractedView, &RenderVisibleEntities, &Msaa)>,
     has_marker: Query<(), With<DrawStencil>>,
+    mini_camera_query: Query<(), With<MiniCamera>>,
 ) {
-    for (view, visible_entities, msaa) in &mut views {
+    for (view_entity, view, visible_entities, msaa) in &mut views {
+        // 检查是否是小相机视图 - 我们只希望在小相机中渲染stencil效果
+        let is_mini_camera_view = mini_camera_query.contains(view_entity);
+        if !is_mini_camera_view {
+            // 如果不是小相机视图，则跳过此视图
+            continue;
+        }
+
         let Some(custom_phase) = custom_render_phases.get_mut(&view.retained_view_entity) else {
             continue;
         };
@@ -603,15 +940,16 @@ impl ViewNode for CustomDrawNode {
         let Some(stencil_phase) = stencil_phases.get(&view.retained_view_entity) else {
             return Ok(());
         };
-
+        
+        // 检查是否为小相机视图
+        let is_mini_camera = world.get::<MiniCamera>(view_entity).is_some();
+        
         // Render pass setup
+        // 这里使用小相机视图的目标纹理，而不是直接显示在屏幕上
+        // 小相机本身已经被设置为渲染到我们之前创建的纹理
         let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
-            label: Some("stencil pass"),
-            // For the purpose of the example, we will write directly to the view target. A real
-            // stencil pass would write to a custom texture and that texture would be used in later
-            // passes to render custom effects using it.
+            label: Some(if is_mini_camera { "mini camera stencil pass" } else { "stencil pass" }),
             color_attachments: &[Some(target.get_color_attachment())],
-            // We don't bind any depth buffer for this pass
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
@@ -622,7 +960,6 @@ impl ViewNode for CustomDrawNode {
         }
 
         // Render the phase
-        // This will execute each draw functions of each phase items queued in this phase
         if let Err(err) = stencil_phase.render(&mut render_pass, world, view_entity) {
             error!("Error encountered while rendering the stencil phase {err:?}");
         }

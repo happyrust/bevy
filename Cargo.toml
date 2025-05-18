@@ -33,7 +33,7 @@ members = [
   # Internal tools that are not published.
   "tools/*",
   # Bevy's error codes. This is a crate so we can automatically check all of the code blocks.
-  "errors",
+  "errors", "my_3d_scene",
 ]
 exclude = [
   # Integration tests are not part of the workspace
@@ -2714,6 +2714,11 @@ name = "custom_post_processing"
 path = "examples/shader/custom_post_processing.rs"
 doc-scrape-examples = true
 
+[[example]]
+name = "custom_offscreen_pass"
+path = "examples/shader/custom_offscreen_pass.rs"
+doc-scrape-examples = true
+
 [package.metadata.example.custom_post_processing]
 name = "Post Processing - Custom Render Pass"
 description = "A custom post processing effect, using a custom render pass that runs after the main pass"
@@ -4361,3 +4366,8 @@ name = "Extended Bindless Material"
 description = "Demonstrates bindless `ExtendedMaterial`"
 category = "Shaders"
 wasm = false
+
+[[example]]
+name = "roi_camera_example"
+path = "examples/camera/roi_camera_example.rs"
+doc-scrape-examples = true

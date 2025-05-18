@@ -18,7 +18,7 @@ use bevy::{
         Render, RenderApp, RenderSystems, ExtractSchedule,
     },
 };
-use bevy_render::Extract;
+use bevy_render::{Extract, RenderSet};
 use bevy_render::render_graph::RenderGraph;
 
 /// This example uses a shader source file from the assets subdirectory

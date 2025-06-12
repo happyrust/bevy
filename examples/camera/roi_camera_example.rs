@@ -332,7 +332,7 @@ fn setup(
         // 显示纹理的背景图像
         ImageNode::new(texture_handle.clone()),
         // 边框颜色
-        BorderColor(LinearRgba::RED.into()),
+        BorderColor::all(LinearRgba::RED.into()),
         // 背景颜色设为透明
         BackgroundColor(Color::NONE),
     ));

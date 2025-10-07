@@ -33,7 +33,7 @@ pub mod prelude {
     pub use crate::{
         sprite::{Sprite, SpriteImageMode},
         texture_slice::{BorderRect, SliceScaleMode, TextureSlice, TextureSlicer},
-        ScalingMode,
+        SpriteScalingMode,
     };
 }
 
@@ -87,7 +87,7 @@ impl Plugin for SpritePlugin {
                 bevy_text::detect_text_needs_rerender::<Text2d>,
                 update_text2d_layout
                     .after(bevy_camera::CameraUpdateSystems)
-                    .after(bevy_text::remove_dropped_font_atlas_sets),
+                    .after(bevy_text::free_unused_font_atlases_system),
                 calculate_bounds_text2d.in_set(VisibilitySystems::CalculateBounds),
             )
                 .chain()

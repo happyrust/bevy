@@ -1,0 +1,150 @@
+[package]
+name = "bevy_asset_loader"
+version = "0.23.0"
+authors = ["Niklas Eicker <git@nikl.me>"]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Bevy plugin for asset loading"
+repository = "https://github.com/NiklasEi/bevy_asset_loader"
+homepage = "https://github.com/NiklasEi/bevy_asset_loader"
+documentation = "https://docs.rs/bevy_asset_loader"
+keywords = ["bevy", "gamedev", "asset", "assets"]
+categories = ["game-development"]
+rust-version = "1.85.0"
+readme = "README.md"
+
+[features]
+# This feature adds support for bevy's TextureAtlas assets
+2d = [
+    "dep:bevy_image",
+    "dep:bevy_math",
+    "dep:bevy_render",
+    "dep:bevy_sprite",
+    "bevy_asset_loader_derive/2d",
+]
+# This feature adds support for bevy's StandardMaterial assets
+3d = [
+    "dep:bevy_image",
+    "dep:bevy_pbr",
+    "dep:bevy_render",
+    "bevy_asset_loader_derive/3d",
+]
+standard_dynamic_assets = ["dep:bevy_common_assets", "dep:serde"]
+progress_tracking = ["dep:iyes_progress"]
+
+[dependencies]
+bevy_app = { git = "https://github.com/happyrust/bevy", default-features = false }
+bevy_asset = { git = "https://github.com/happyrust/bevy", default-features = false }
+bevy_ecs = { git = "https://github.com/happyrust/bevy", default-features = false }
+bevy_image = { git = "https://github.com/happyrust/bevy", default-features = false, optional = true }
+bevy_log = { git = "https://github.com/happyrust/bevy", default-features = false }
+bevy_math = { git = "https://github.com/happyrust/bevy", default-features = false, optional = true }
+bevy_pbr = { git = "https://github.com/happyrust/bevy", default-features = false, optional = true }
+bevy_platform = { git = "https://github.com/happyrust/bevy", default-features = false }
+bevy_reflect = { git = "https://github.com/happyrust/bevy", default-features = false }
+bevy_render = { git = "https://github.com/happyrust/bevy", default-features = false, optional = true }
+bevy_sprite = { git = "https://github.com/happyrust/bevy", default-features = false, optional = true }
+bevy_state = { git = "https://github.com/happyrust/bevy", default-features = false }
+bevy_utils = { git = "https://github.com/happyrust/bevy", default-features = false }
+bevy_asset_loader_derive = { version = "0.23.0", path = "../bevy_asset_loader_derive" }
+anyhow = "1"
+path-slash = "0.2"
+
+bevy_common_assets = { version = "0.13.0", features = ["ron"], optional = true }
+serde = { version = "1", optional = true }
+iyes_progress = { version = "0.14.0", optional = true }
+
+[dev-dependencies]
+bevy = { git = "https://github.com/happyrust/bevy", features = ["vorbis"] }
+anyhow = "1"
+iyes_progress = { version = "0.14.0" }
+bevy_common_assets = { version = "0.13.0", features = ["ron"] }
+serde = { version = "1" }
+ron = "0.8.1"
+trybuild = { version = "1.0" }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
+
+[[example]]
+name = "two_collections"
+path = "examples/two_collections.rs"
+
+[[example]]
+name = "atlas_from_grid"
+path = "examples/atlas_from_grid.rs"
+required-features = ["2d"]
+
+[[example]]
+name = "finally_init_resource"
+path = "examples/finally_init_resource.rs"
+
+[[example]]
+name = "manual_dynamic_asset"
+path = "examples/manual_dynamic_asset.rs"
+required-features = ["standard_dynamic_assets"]
+
+[[example]]
+name = "dynamic_asset"
+path = "examples/dynamic_asset.rs"
+required-features = ["2d", "standard_dynamic_assets"]
+
+[[example]]
+name = "no_loading_state"
+path = "examples/no_loading_state.rs"
+required-features = ["2d"]
+
+[[example]]
+name = "standard_material"
+path = "examples/standard_material.rs"
+required-features = ["3d"]
+
+[[example]]
+name = "progress_tracking"
+path = "examples/progress_tracking.rs"
+required-features = ["progress_tracking", "2d"]
+
+[[example]]
+name = "failure_state"
+path = "examples/failure_state.rs"
+
+[[example]]
+name = "full_collection"
+path = "examples/full_collection.rs"
+required-features = ["2d", "3d"]
+
+[[example]]
+name = "full_dynamic_collection"
+path = "examples/full_dynamic_collection.rs"
+required-features = ["2d", "3d", "standard_dynamic_assets"]
+
+[[example]]
+name = "dynamic_asset_arrays"
+path = "examples/dynamic_asset_arrays.rs"
+required-features = ["2d", "3d", "standard_dynamic_assets"]
+
+[[example]]
+name = "custom_dynamic_assets"
+path = "examples/custom_dynamic_assets.rs"
+
+[[example]]
+name = "image_asset"
+path = "examples/image_asset.rs"
+required-features = ["2d"]
+
+[[example]]
+name = "configure_loading_state"
+path = "examples/configure_loading_state.rs"
+required-features = ["2d"]
+
+[[example]]
+name = "asset_maps"
+path = "examples/asset_maps.rs"
+
+[[example]]
+name = "sub_state"
+path = "examples/sub_state.rs"

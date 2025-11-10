@@ -30,6 +30,8 @@ members = [
   "examples/no_std/*",
   # Examples of compiling Bevy with automatic reflect type registration for platforms without `inventory` support.
   "examples/reflection/auto_register_static",
+  # GPU-driven LOD demo example
+  "examples/gpu_lod_demo",
   # Benchmarks
   "benches",
   # Internal tools that are not published.
